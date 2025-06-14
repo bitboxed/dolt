@@ -16,7 +16,7 @@ from the remotesrv directory
 
 #### synopsis
 
-    remotesrv [--dir <directory>] [--http-port <PORT>] [--grpc-port <PORT>]
+    remotesrv [--dir <directory>] [--http-port <PORT>] [--grpc-port <PORT>] [--admin-user <user>] [--admin-password <password>]
     
 #### options
 
@@ -28,6 +28,10 @@ from the remotesrv directory
     
     -http-port
     	port on which the http file server is running (Default 80)
+    
+    -admin-user, -admin-password
+        admin user & password when using basic auth to provide to remotesrv for auth
+    
       
 ## Using with dolt
 
@@ -40,3 +44,21 @@ In order to point the dolt cli to use this server you will need to add a remote 
 #### clone
 
     dolt clone http://localhost:<PORT>/<ORG>/<REPO>
+
+### Building locally
+From this directory (`go/utils/remotesrv`):
+```
+go mod tidy
+go build -o remotesrv main.go cscache.go
+```
+
+### Publishing to Dockerhub
+From the root of the bitboxed/dolt repo:
+```
+docker buildx build --platform linux/arm64 -f Dockerfile.remotesrv -t priley86/remotesrv:arm64 --push .
+```
+
+You can run this after reclaim disk space used in Buildx cache:
+```
+docker buildx prune --all --force
+```
