@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 
@@ -26,12 +27,24 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
+	remotesrv "github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
 var result []byte
+
+func basicAuthMiddleware(username, password string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		u, p, ok := r.BasicAuth()
+		if !ok || u != username || p != password {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 func main() {
 	readOnlyParam := flag.Bool("read-only", false, "run a read-only server which does not allow writes")
@@ -40,6 +53,8 @@ func main() {
 	grpcPortParam := flag.Int("grpc-port", -1, "the port the grpc server will listen on; default 50051")
 	httpPortParam := flag.Int("http-port", -1, "the port the http server will listen on; default 80; if http-port is equal to grpc-port, both services will serve over the same port")
 	httpHostParam := flag.String("http-host", "", "hostname to use in the host component of the URLs that the server generates; default ''; if '', server will echo the :authority header")
+	adminUser := flag.String("admin-user", "", "admin username")
+	adminPassword := flag.String("admin-password", "", "admin password")
 	flag.Parse()
 
 	if dirParam != nil && len(*dirParam) > 0 {
@@ -81,9 +96,9 @@ func main() {
 		}
 		db := doltdb.HackDatasDatabaseFromDoltDB(dEnv.DoltDB(ctx))
 		cs := datas.ChunkStoreFromDatabase(db)
-		dbCache = SingletonCSCache{cs.(remotesrv.RemoteSrvStore)}
+		dbCache = remotesrv.SingletonCSCache{cs.(remotesrv.RemoteSrvStore)}
 	} else {
-		dbCache = NewLocalCSCache(fs)
+		dbCache = remotesrv.NewLocalCSCache(fs)
 	}
 
 	server, err := remotesrv.NewServer(remotesrv.ServerArgs{
@@ -94,6 +109,8 @@ func main() {
 		DBCache:            dbCache,
 		ReadOnly:           *readOnlyParam,
 		ConcurrencyControl: remotesapi.PushConcurrencyControl_PUSH_CONCURRENCY_CONTROL_IGNORE_WORKING_SET,
+		HttpInterceptor:     func(h http.Handler) http.Handler { return basicAuthMiddleware(*adminUser, *adminPassword, h) },
+		TLSConfig:           nil, // add TLSConfig here if needed
 	})
 	if err != nil {
 		log.Fatalf("error creating remotesrv Server: %v\n", err)
