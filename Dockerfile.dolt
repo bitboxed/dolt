@@ -1,0 +1,26 @@
+# syntax=docker/dockerfile:1
+FROM golang:1.24 as builder
+
+# Add required packages for CGo zstd (Debian-based)
+RUN apt-get update && apt-get install -y libzstd-dev pkg-config build-essential git make bash
+
+WORKDIR /app
+
+# Copy the entire repo into container
+COPY . .
+
+# Set Go envs
+ENV GOOS=linux \
+    GOARCH=arm64
+
+# Build the remotesrv binary using full monorepo
+WORKDIR /app/go/cmd/dolt
+RUN go build -o /usr/local/bin/dolt
+
+FROM debian:bullseye-slim
+RUN apt-get update && apt-get install -y ca-certificates && apt-get clean
+
+COPY --from=builder /usr/local/bin/dolt /usr/local/bin/dolt
+
+ENTRYPOINT ["dolt"]
+CMD ["--help"]

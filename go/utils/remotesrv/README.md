@@ -55,7 +55,7 @@ go build -o remotesrv main.go cscache.go
 ### Publishing to Dockerhub
 From the root of the bitboxed/dolt repo:
 ```
-docker buildx build --platform linux/arm64 -f Dockerfile.remotesrv -t priley86/remotesrv:arm64 --push .
+docker buildx build --platform linux/arm64 -f Dockerfile.remotesrv -t <your-user>/remotesrv:arm64 --push .
 ```
 
 You can run this after reclaim disk space used in Buildx cache:
